@@ -7,7 +7,7 @@ from matplotlib import font_manager as fm
 import os
 
 kcal_per_day_display = 0
-st.sidebar.title('Menu')
+st.sidebar.title('메뉴')
 page = st.sidebar.radio("페이지 선택", ['홈', '수면 리듬 관리', '식단 조절'])
 
 # --- 폰트 설정 함수 추가 ---
@@ -154,7 +154,7 @@ def draw_rem_graph(sleep_start_dt, actual_sleep_duration_minutes, desired_wake_t
 
 if page == '홈':
     st.title("🧠 생활 관리 프로그램")
-    st.info("왼쪽 사이드바에서 원하는 기능을 선택해주세요.")
+    st.write("왼쪽 사이드바에서 원하는 기능을 선택해주세요.")
 
 # ───────────────────────────────
 # 😴 섹션 1: 수면 리듬 관리
@@ -305,11 +305,15 @@ if page == '식단 조절':
         activity = st.session_state.activity_input
         goal_date = st.session_state.goal_date_input
         st.subheader("결과")
-        days_left = (goal_date - date.today()).days
-        weight_diff = weight - goal_weight
+        
+        original_goal_date = goal_date
+        original_days_left = (original_goal_date - date.today()).days
         
         date_adjustment_message = ""
-        if days_left <= 0:
+        extended_date_output = ""
+        days_left = original_days_left
+
+        if original_days_left <= 0:
             days_left = 30
             goal_date = date.today() + timedelta(days=30)
             date_adjustment_message = "⚠️ 목표 달성 날짜가 오늘이거나 과거이므로, 계산을 위해 목표 날짜를 오늘로부터 30일 뒤로 임시 설정했습니다."
@@ -322,46 +326,73 @@ if page == '식단 조절':
         activity_factor = {"낮음": 1.2, "보통": 1.55, "높음": 1.9}[activity]
         tdee = bmr * activity_factor
         
-        daily_calorie_change_needed = (weight_diff * 7700) / days_left
+        weight_diff = weight - goal_weight
         
-        target_kcal = tdee - daily_calorie_change_needed
+        target_kcal = tdee
+        kcal_per_day_display = 0
 
-        min_healthy_kcal = 1200 if gender == "여성" else 1500
+        if weight_diff != 0:
+            calories_to_change = abs(weight_diff) * 7700
 
-        if weight_diff < 0:
-            if target_kcal < tdee + 200:
-                original_days_left = (st.session_state.goal_date_input - date.today()).days
-                adjusted_days_left = original_days_left
-                while target_kcal < tdee + 200:
-                    adjusted_days_left += 7
-                    if adjusted_days_left <= 0:
-                        adjusted_days_left = 7
-                    daily_calorie_change_needed = (weight_diff * 7700) / adjusted_days_left
-                    target_kcal = tdee - daily_calorie_change_needed
-                    if adjusted_days_left > 365 * 5:
-                        break
-                if adjusted_days_left > original_days_left:
-                    date_adjustment_message += f" 📈 건강한 체중 증량을 위해 목표 달성 날짜를 {adjusted_days_left - original_days_left}일 연장했습니다."
-                days_left = adjusted_days_left
-                kcal_per_day_display = -daily_calorie_change_needed
+            if weight_diff > 0: # 체중 감량
+                daily_calorie_change = calories_to_change / days_left
+                target_kcal = tdee - daily_calorie_change
+                
+                min_healthy_kcal = 1200 if gender == "여성" else 1500
+                if target_kcal < min_healthy_kcal:
+                    date_adjustment_message += f" 📉 건강한 체중 감량을 위해 하루 최소 칼로리({min_healthy_kcal:.0f} kcal)로 설정했습니다."
+                    target_kcal = min_healthy_kcal
+                    
+                    daily_calorie_change_for_date_calc = tdee - target_kcal
+                    if daily_calorie_change_for_date_calc > 0:
+                        adjusted_days_left = int((calories_to_change / daily_calorie_change_for_date_calc) + 0.99999999)
+                        days_extended = adjusted_days_left - days_left
+                        
+                        if days_extended > 0:
+                            extended_date = date.today() + timedelta(days=adjusted_days_left)
+                            extended_date_output = f"➡️ 목표 날짜가 **{original_goal_date.strftime('%Y년 %m월 %d일')}**에서 **{extended_date.strftime('%Y년 %m월 %d일')}**로 연장되었습니다."
+                            days_left = adjusted_days_left
+                            goal_date = extended_date
+                            st.session_state.goal_date_input = goal_date
+            
+            elif weight_diff < 0: # 체중 증량
+                daily_calorie_change = calories_to_change / days_left
+                target_kcal = tdee + daily_calorie_change
+                
+                max_healthy_kcal = bmr + 500
+                if target_kcal > max_healthy_kcal:
+                    # 체중 증량 날짜 연장 로직 수정
+                    date_adjustment_message += f" 📈 건강한 체중 증량을 위해 하루 최대 칼로리({max_healthy_kcal:.0f} kcal)로 설정했습니다."
+                    target_kcal = max_healthy_kcal
+                    
+                    daily_calorie_change_for_date_calc = target_kcal - tdee
+                    if daily_calorie_change_for_date_calc > 0:
+                        adjusted_days_left = int((calories_to_change / daily_calorie_change_for_date_calc) + 0.99999999)
+                        days_extended = adjusted_days_left - days_left
+                        
+                        if days_extended > 0:
+                            extended_date = date.today() + timedelta(days=adjusted_days_left)
+                            extended_date_output = f"➡️ 목표 날짜가 **{original_goal_date.strftime('%Y년 %m월 %d일')}**에서 **{extended_date.strftime('%Y년 %m월 %d일')}**로 연장되었습니다."
+                            days_left = adjusted_days_left
+                            goal_date = extended_date
+                            st.session_state.goal_date_input = goal_date
+                    else:
+                        date_adjustment_message += " 현재 활동량으로는 건강한 칼로리 섭취량 내에서 체중 증량이 불가능하여, 날짜 연장 없이 목표를 다시 설정해야 합니다."
+                        target_kcal = tdee
         
-        else:
-            if target_kcal < min_healthy_kcal:
-                original_days_left = (st.session_state.goal_date_input - date.today()).days
-                adjusted_days_left = original_days_left
-                while target_kcal < min_healthy_kcal:
-                    adjusted_days_left += 7
-                    if adjusted_days_left <= 0:
-                        adjusted_days_left = 7
-                    daily_calorie_change_needed = (weight_diff * 7700) / adjusted_days_left
-                    target_kcal = tdee - daily_calorie_change_needed
-                    if adjusted_days_left > 365 * 5:
-                        break
-                if adjusted_days_left > original_days_left:
-                    date_adjustment_message += f" 📉 건강한 체중 감량을 위해 목표 달성 날짜를 {adjusted_days_left - original_days_left}일 연장했습니다."
-                days_left = adjusted_days_left
-            kcal_per_day_display = daily_calorie_change_needed
-
+        # 최종적으로 확정된 칼로리 변화량을 표시용 변수에 저장
+        if weight_diff > 0:
+            kcal_per_day_display = tdee - target_kcal
+        elif weight_diff < 0:
+            kcal_per_day_display = target_kcal - tdee
+        
+        # 칼로리 변화량이 음수가 되지 않도록 절대값 사용
+        kcal_per_day_display = abs(kcal_per_day_display)
+        
+        # 목표 칼로리가 음수 또는 0이 되지 않도록 보정
+        if target_kcal <= 0:
+            target_kcal = 1000 # 최소값 설정
+            
         breakfast = target_kcal * 0.5
         lunch = target_kcal * 0.33
         dinner = target_kcal * 0.17
@@ -369,12 +400,20 @@ if page == '식단 조절':
         st.subheader("📊 식단 결과 요약")
         if date_adjustment_message:
             st.warning(date_adjustment_message)
+        if extended_date_output:
+            st.success(extended_date_output)
+            
         st.write(f"✔️ 남은 일수: {days_left}일")
         
-        if weight_diff < 0:
-            st.write(f"✔️ 일일 증량 목표: {abs(kcal_per_day_display):.0f} kcal")
+        if weight_diff > 0:
+            st.write(f"✔️ 일일 감량 목표: {kcal_per_day_display:.0f} kcal")
+        elif weight_diff < 0:
+            if kcal_per_day_display > 0:
+                st.write(f"✔️ 일일 증량 목표: {kcal_per_day_display:.0f} kcal")
+            else:
+                st.write("✔️ 현재 활동량으로는 건강한 체중 증량 목표를 설정할 수 없습니다.")
         else:
-            st.write(f"✔️ 일일 감량 목표: {abs(kcal_per_day_display):.0f} kcal")
+            st.write(f"✔️ 일일 유지 목표: {kcal_per_day_display:.0f} kcal")
             
         st.write(f"✔️ 일일 섭취 권장량: {target_kcal:.0f} kcal")
 
@@ -388,21 +427,12 @@ if page == '식단 조절':
         st.subheader("🗓️ 일별 식단 계획")
 
         if days_left > 0:
-            daily_plan_data = []
-            current_date = date.today()
-            adjusted_goal_date_for_display = date.today() + timedelta(days=days_left)
-            while current_date <= adjusted_goal_date_for_display:
-                daily_plan_data.append({
-                    "날짜": current_date.strftime("%Y-%m-%d"),
-                    "총 권장 칼로리": f"{target_kcal:.0f} kcal",
-                    "아침": f"{breakfast:.0f} kcal",
-                    "점심": f"{lunch:.0f} kcal",
-                    "저녁": f"{dinner:.0f} kcal"
-                })
-                current_date += timedelta(days=1)
+            start_date = date.today()
+            end_date = start_date + timedelta(days=days_left -1)
             
-            df_daily_plan = pd.DataFrame(daily_plan_data)
-            st.dataframe(df_daily_plan, use_container_width=True)
+            st.markdown(f"**{start_date.year}.{start_date.month}.{start_date.day} ~ {end_date.year}.{end_date.month}.{end_date.day}**")
+            st.markdown(f"**- 하루 총 칼로리 : {target_kcal:.0f} kcal**")
+            st.markdown(f"**- 아침 : {breakfast:.0f} kcal, 점심 : {lunch:.0f} kcal, 저녁 : {dinner:.0f} kcal**")
         else:
             st.info("목표 달성 날짜가 설정되지 않았거나 과거이므로 일별 식단 계획을 표시할 수 없습니다.")
         if st.button("결과 닫기", key="close_diet_results_btn"):
@@ -420,5 +450,4 @@ if page == '식단 조절':
 
         if st.button("식단 조절 결과 보기", key="show_diet_results_btn"):
             st.session_state.current_view = 'diet_results'
-
             st.rerun()
