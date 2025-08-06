@@ -1,0 +1,10 @@
+streamlit
+datetime
+date
+time
+timedelta
+matplotlib.pyplot
+numpy
+pandas
+matplotlib.font_manager
+os
