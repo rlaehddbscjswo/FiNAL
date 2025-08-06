@@ -7,7 +7,7 @@ from matplotlib import font_manager as fm
 import os
 
 kcal_per_day_display = 0
-st.sidebar.title('메뉴')
+st.sidebar.title('Menu')
 page = st.sidebar.radio("페이지 선택", ['홈', '수면 리듬 관리', '식단 조절'])
 
 # --- 폰트 설정 함수 추가 ---
@@ -154,7 +154,7 @@ def draw_rem_graph(sleep_start_dt, actual_sleep_duration_minutes, desired_wake_t
 
 if page == '홈':
     st.title("🧠 생활 관리 프로그램")
-    st.write("왼쪽 사이드바에서 원하는 기능을 선택해주세요.")
+    st.info("왼쪽 사이드바에서 원하는 기능을 선택해주세요.")
 
 # ───────────────────────────────
 # 😴 섹션 1: 수면 리듬 관리
@@ -420,4 +420,5 @@ if page == '식단 조절':
 
         if st.button("식단 조절 결과 보기", key="show_diet_results_btn"):
             st.session_state.current_view = 'diet_results'
+
             st.rerun()
